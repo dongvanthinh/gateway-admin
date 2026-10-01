@@ -1,0 +1,1233 @@
+openapi: 3.1.2
+info:
+  title: PayPay Gateway internal Admin API
+  version: 0.1.0-local-candidate
+  description: >-
+    API nội bộ chạy trên loopback để đội Gateway tạo/đọc Merchant và
+    MerchantClient, cập nhật thuộc tính, thay đổi lifecycle theo CAS và đọc
+    Payment. Chỉ chạy trên loopback, không phải public Merchant API; không có
+    HTTP authentication độc lập.
+security: []
+servers:
+  - url: http://127.0.0.1:1208
+paths:
+  /admin/v1/merchants:
+    get:
+      operationId: listMerchants
+      parameters:
+        - $ref: "#/components/parameters/MerchantListCursor"
+        - $ref: "#/components/parameters/MerchantListLimit"
+        - $ref: "#/components/parameters/MerchantListLifecycleState"
+        - $ref: "#/components/parameters/MerchantListSearch"
+        - $ref: "#/components/parameters/MerchantListSortBy"
+        - $ref: "#/components/parameters/MerchantListSortOrder"
+      responses:
+        "200":
+          description: Danh sách Merchant theo bộ lọc lifecycle
+          headers:
+            Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MerchantList"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "405": { $ref: "#/components/responses/MethodNotAllowed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    post:
+      operationId: createMerchant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [display_name]
+              properties:
+                display_name:
+                  type: string
+                  minLength: 1
+                  maxLength: 256
+      responses:
+        "201":
+          description: Merchant được tạo ở trạng thái ONBOARDING; id do Gateway sinh
+          headers:
+            Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Merchant"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "405": { $ref: "#/components/responses/MethodNotAllowed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/CommitUnknown" }
+  /admin/v1/merchants/{id}:
+    patch:
+      operationId: updateMerchant
+      description: >-
+        Cập nhật display_name theo expected_version. Field lạ hoặc thiếu field
+        mutable trả 400; giá trị sai trả 422; CAS conflict trả 409.
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMerchant"
+      responses:
+        "200":
+          description: Merchant sau cập nhật
+          headers:
+            Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Merchant"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "405": { $ref: "#/components/responses/MethodNotAllowed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/CommitUnknown" }
+    get:
+      operationId: getMerchant
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      responses:
+        "200":
+          description: Merchant hiện hành
+          headers:
+            Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Merchant"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "405": { $ref: "#/components/responses/MethodNotAllowed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /admin/v1/merchants/{id}/suspend:
+    post:
+      operationId: suspendMerchant
+      description: Tạm dừng Merchant đang ACTIVE theo expected_version.
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MerchantLifecycleCommand"
+      responses:
+        "200":
+          description: Merchant SUSPENDED
+          headers:
+            Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Merchant"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "405": { $ref: "#/components/responses/MethodNotAllowed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/CommitUnknown" }
+  /admin/v1/merchants/{id}/resume:
+    post:
+      operationId: resumeMerchant
+      description: Khôi phục Merchant đang SUSPENDED theo expected_version.
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MerchantLifecycleCommand"
+      responses:
+        "200":
+          description: Merchant ACTIVE
+          headers:
+            Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Merchant"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "405": { $ref: "#/components/responses/MethodNotAllowed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/CommitUnknown" }
+  /admin/v1/merchants/{id}/activate:
+    post:
+      operationId: activateMerchant
+      description: Kích hoạt Merchant sau khi MerchantClient liên kết đã ACTIVE
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [merchant_client_id, expected_version]
+              properties:
+                merchant_client_id: { $ref: "#/components/schemas/MerchantClientID" }
+                expected_version: { type: integer, format: int64, minimum: 1 }
+      responses:
+        "200":
+          description: Merchant ACTIVE
+          headers:
+            Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Merchant"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "405": { $ref: "#/components/responses/MethodNotAllowed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/CommitUnknown" }
+  /admin/v1/merchants/{id}/clients:
+    get:
+      operationId: listMerchantClients
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+        - $ref: "#/components/parameters/MerchantClientListCursor"
+        - $ref: "#/components/parameters/MerchantClientListLimit"
+        - $ref: "#/components/parameters/MerchantClientListLifecycleState"
+        - $ref: "#/components/parameters/MerchantClientListSearch"
+        - $ref: "#/components/parameters/MerchantClientListSortBy"
+        - $ref: "#/components/parameters/MerchantClientListSortOrder"
+      responses:
+        "200":
+          description: Danh sách MerchantClient thuộc Merchant theo bộ lọc
+          headers:
+            Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MerchantClientList"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "405": { $ref: "#/components/responses/MethodNotAllowed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+    post:
+      operationId: createMerchantClient
+      parameters:
+        - $ref: "#/components/parameters/ResourceID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMerchantClient"
+      responses:
+        "201":
+          description: MerchantClient được tạo ở trạng thái PENDING; id do Gateway sinh
+          headers:
+            Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MerchantClient"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "405": { $ref: "#/components/responses/MethodNotAllowed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/CommitUnknown" }
+  /admin/v1/merchant-clients/{id}:
+    patch:
+      operationId: updateMerchantClient
+      description: >-
+        DEC-322: expected_version và ít nhất một field mutable. Field vắng mặt
+        giữ nguyên; allowed_ips null tắt giới hạn; name/webhook_url không nhận null.
+        Field lạ hoặc thiếu field mutable trả 400; giá trị sai trả 422; CAS conflict trả 409.
+      parameters:
+        - $ref: "#/components/parameters/MerchantClientID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMerchantClient"
+      responses:
+        "200":
+          description: MerchantClient sau cập nhật
+          headers:
+            Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MerchantClient"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "405": { $ref: "#/components/responses/MethodNotAllowed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/CommitUnknown" }
+    get:
+      operationId: getMerchantClient
+      parameters:
+        - $ref: "#/components/parameters/MerchantClientID"
+      responses:
+        "200":
+          description: MerchantClient hiện hành
+          headers:
+            Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MerchantClient"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "405": { $ref: "#/components/responses/MethodNotAllowed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+  /admin/v1/merchant-clients/{id}/activate:
+    post:
+      operationId: activateMerchantClient
+      parameters:
+        - $ref: "#/components/parameters/MerchantClientID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expected_version]
+              properties:
+                expected_version: { type: integer, format: int64, minimum: 1 }
+      responses:
+        "200":
+          description: MerchantClient ACTIVE
+          headers:
+            Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MerchantClient"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "405": { $ref: "#/components/responses/MethodNotAllowed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/CommitUnknown" }
+  /admin/v1/merchant-clients/{id}/suspend:
+    post:
+      operationId: suspendMerchantClient
+      description: Tạm dừng MerchantClient đang ACTIVE theo expected_version.
+      parameters:
+        - $ref: "#/components/parameters/MerchantClientID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MerchantClientLifecycleCommand"
+      responses:
+        "200":
+          description: MerchantClient SUSPENDED
+          headers:
+            Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MerchantClient"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "405": { $ref: "#/components/responses/MethodNotAllowed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/CommitUnknown" }
+  /admin/v1/merchant-clients/{id}/resume:
+    post:
+      operationId: resumeMerchantClient
+      description: Khôi phục MerchantClient đang SUSPENDED theo expected_version.
+      parameters:
+        - $ref: "#/components/parameters/MerchantClientID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MerchantClientLifecycleCommand"
+      responses:
+        "200":
+          description: MerchantClient ACTIVE
+          headers:
+            Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MerchantClient"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "405": { $ref: "#/components/responses/MethodNotAllowed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/CommitUnknown" }
+  /admin/v1/merchant-clients/{id}/revoke:
+    post:
+      operationId: revokeMerchantClient
+      description: Thu hồi vĩnh viễn MerchantClient theo expected_version.
+      parameters:
+        - $ref: "#/components/parameters/MerchantClientID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MerchantClientLifecycleCommand"
+      responses:
+        "200":
+          description: MerchantClient REVOKED
+          headers:
+            Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MerchantClient"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "405": { $ref: "#/components/responses/MethodNotAllowed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/CommitUnknown" }
+  /admin/v1/merchants/{merchant_id}/payments:
+    get:
+      operationId: listPayments
+      parameters:
+        - $ref: "#/components/parameters/MerchantID"
+        - $ref: "#/components/parameters/PaymentListCursor"
+        - $ref: "#/components/parameters/PaymentListLimit"
+        - $ref: "#/components/parameters/PaymentListStatus"
+        - $ref: "#/components/parameters/PaymentListAcceptedFrom"
+        - $ref: "#/components/parameters/PaymentListAcceptedTo"
+        - $ref: "#/components/parameters/PaymentListMerchantOrderID"
+        - $ref: "#/components/parameters/PaymentListOperationID"
+      responses:
+        "200":
+          description: Danh sách Payment thuộc merchant theo bộ lọc
+          headers:
+            Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentAdminList"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "405": { $ref: "#/components/responses/MethodNotAllowed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /admin/v1/merchants/{merchant_id}/payments/{payment_id}:
+    get:
+      operationId: getPaymentDetail
+      parameters:
+        - $ref: "#/components/parameters/MerchantID"
+        - $ref: "#/components/parameters/PaymentID"
+      responses:
+        "200":
+          description: Payment và current Payment Attempt hiện hành
+          headers:
+            Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentAdminDetail"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "405": { $ref: "#/components/responses/MethodNotAllowed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /admin/v1/merchants/{merchant_id}/payments/{payment_id}/attempts:
+    get:
+      operationId: listPaymentAttempts
+      parameters:
+        - $ref: "#/components/parameters/MerchantID"
+        - $ref: "#/components/parameters/PaymentID"
+        - $ref: "#/components/parameters/PaymentListCursor"
+        - $ref: "#/components/parameters/PaymentListLimit"
+        - $ref: "#/components/parameters/PaymentAttemptListStatus"
+      responses:
+        "200":
+          description: Danh sách Payment Attempt thuộc Payment
+          headers:
+            Request-Id:
+              $ref: "#/components/headers/RequestId"
+            Cache-Control:
+              $ref: "#/components/headers/CacheControl"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentAttemptAdminList"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "405": { $ref: "#/components/responses/MethodNotAllowed" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+components:
+  parameters:
+    ResourceID:
+      name: id
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/MerchantID"
+    MerchantListCursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 2048
+      description: Cursor opaque do server sinh; không được client tự giải mã hoặc tạo.
+    MerchantListLimit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 100
+        default: 50
+    MerchantListLifecycleState:
+      name: lifecycle_state
+      in: query
+      required: false
+      style: form
+      explode: true
+      schema:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items:
+          type: string
+          enum: [ONBOARDING, ACTIVE, SUSPENDED, CLOSED]
+    MerchantListSearch:
+      name: search
+      in: query
+      required: false
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 256
+      description: Tìm không phân biệt hoa thường theo tên hoặc mã Merchant.
+    MerchantListSortBy:
+      name: sort_by
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [display_name, created_at, updated_at]
+        default: updated_at
+    MerchantListSortOrder:
+      name: sort_order
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [asc, desc]
+        default: desc
+    MerchantClientID:
+      name: id
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/MerchantClientID"
+    MerchantClientListCursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 2048
+      description: Cursor opaque do server sinh; không được client tự giải mã hoặc tạo.
+    MerchantClientListLimit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 100
+        default: 50
+    MerchantClientListLifecycleState:
+      name: lifecycle_state
+      in: query
+      required: false
+      style: form
+      explode: true
+      schema:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items:
+          type: string
+          enum: [PENDING, ACTIVE, SUSPENDED, REVOKED]
+    MerchantClientListSearch:
+      name: search
+      in: query
+      required: false
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 256
+      description: Tìm không phân biệt hoa thường theo tên hoặc mã MerchantClient.
+    MerchantClientListSortBy:
+      name: sort_by
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [name, created_at, updated_at]
+        default: updated_at
+    MerchantClientListSortOrder:
+      name: sort_order
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [asc, desc]
+        default: desc
+    MerchantID:
+      name: merchant_id
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/MerchantID"
+    PaymentID:
+      name: payment_id
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/ULID"
+    PaymentListCursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 2048
+      description: Cursor opaque do server sinh; không được client tự giải mã hoặc tạo.
+    PaymentListLimit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 100
+        default: 50
+    PaymentListStatus:
+      name: status
+      in: query
+      required: false
+      style: form
+      explode: true
+      schema:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items:
+          type: string
+          enum: [CREATED, PROCESSING, PENDING, SUCCEEDED, FAILED]
+    PaymentAttemptListStatus:
+      name: status
+      in: query
+      required: false
+      style: form
+      explode: true
+      schema:
+        type: array
+        minItems: 1
+        uniqueItems: true
+        items:
+          type: string
+          enum: [CREATED, REQUESTED, PROCESSING, PENDING, SUCCEEDED, FAILED]
+    PaymentListAcceptedFrom:
+      name: accepted_from
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/InboundInstant"
+    PaymentListAcceptedTo:
+      name: accepted_to
+      in: query
+      required: false
+      schema:
+        $ref: "#/components/schemas/InboundInstant"
+    PaymentListMerchantOrderID:
+      name: merchant_order_id
+      in: query
+      required: false
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 128
+    PaymentListOperationID:
+      name: operation_id
+      in: query
+      required: false
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 64
+  headers:
+    RequestId:
+      description: Định danh yêu cầu dạng ULID do Admin tạo cho mỗi response.
+      schema:
+        $ref: "#/components/schemas/ULID"
+    CacheControl:
+      description: Không cho phép cache response Admin có dữ liệu vận hành.
+      schema:
+        type: string
+        const: no-store
+  schemas:
+    UpdateMerchant:
+      type: object
+      additionalProperties: false
+      required: [expected_version, display_name]
+      properties:
+        expected_version: { type: integer, format: int64, minimum: 1 }
+        display_name: { type: string, minLength: 1, maxLength: 256 }
+    MerchantLifecycleCommand:
+      type: object
+      additionalProperties: false
+      required: [expected_version]
+      properties:
+        expected_version: { type: integer, format: int64, minimum: 1 }
+    MerchantClientLifecycleCommand:
+      type: object
+      additionalProperties: false
+      required: [expected_version]
+      properties:
+        expected_version: { type: integer, format: int64, minimum: 1 }
+    UpdateMerchantClient:
+      type: object
+      additionalProperties: false
+      required: [expected_version]
+      anyOf:
+        - required: [name]
+        - required: [allowed_ips]
+        - required: [webhook_url]
+      properties:
+        expected_version: { type: integer, format: int64, minimum: 1 }
+        name: { type: string, minLength: 1, maxLength: 256 }
+        allowed_ips:
+          type: [array, "null"]
+          minItems: 1
+          items: { type: string }
+        webhook_url:
+          type: string
+          format: uri
+          minLength: 1
+          pattern: '^https://'
+    MerchantID:
+      type: string
+      minLength: 1
+      maxLength: 128
+      pattern: "^[A-Za-z0-9._:-]+$"
+    MerchantClientID:
+      type: string
+      minLength: 26
+      maxLength: 26
+      pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+    ULID:
+      type: string
+      minLength: 26
+      maxLength: 26
+      pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+    Merchant:
+      type: object
+      additionalProperties: false
+      required: [id, display_name, lifecycle_state, version, created_at, updated_at]
+      properties:
+        id: { $ref: "#/components/schemas/MerchantID" }
+        display_name: { type: string, minLength: 1, maxLength: 256 }
+        lifecycle_state: { type: string, enum: [ONBOARDING, ACTIVE, SUSPENDED, CLOSED] }
+        version: { type: integer, format: int64, minimum: 1 }
+        created_at: { $ref: "#/components/schemas/PublicTimestamp" }
+        updated_at: { $ref: "#/components/schemas/PublicTimestamp" }
+    MerchantList:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/Merchant"
+        next_cursor:
+          type: [string, "null"]
+          minLength: 1
+          maxLength: 2048
+    CreateMerchantClient:
+      type: object
+      additionalProperties: false
+      required: [name, mtls_certificate_pem, request_public_key_base64url, valid_from]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 256 }
+        mtls_certificate_pem:
+          type: string
+          description: Đúng một leaf certificate PEM; không gửi private key
+        request_public_key_base64url:
+          type: string
+          minLength: 43
+          maxLength: 43
+          pattern: "^[A-Za-z0-9_-]{43}$"
+          description: Ed25519 public key 32 byte, base64url không padding
+        valid_from: { $ref: "#/components/schemas/InboundInstant" }
+        valid_until:
+          anyOf:
+            - type: "null"
+            - $ref: "#/components/schemas/InboundInstant"
+        webhook_url:
+          type: string
+          format: uri
+          minLength: 1
+          pattern: '^https://'
+          description: URL HTTPS tùy chọn để Gateway gửi callback webhook
+        allowed_ips:
+          type: [array, "null"]
+          minItems: 1
+          items: { type: string }
+    MerchantClient:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - merchant_id
+        - name
+        - lifecycle_state
+        - mtls_fingerprint_sha256
+        - request_public_key_base64url
+        - request_key_fingerprint_sha256
+        - profile_version
+        - valid_from
+        - allowed_ips
+        - valid_until
+        - webhook_url
+        - version
+        - created_at
+        - updated_at
+      properties:
+        id: { $ref: "#/components/schemas/MerchantClientID" }
+        merchant_id: { $ref: "#/components/schemas/MerchantID" }
+        name: { type: string, minLength: 1, maxLength: 256 }
+        lifecycle_state: { type: string, enum: [PENDING, ACTIVE, SUSPENDED, REVOKED] }
+        mtls_fingerprint_sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+        request_public_key_base64url: { type: string, minLength: 43, maxLength: 43, pattern: "^[A-Za-z0-9_-]{43}$" }
+        request_key_fingerprint_sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+        profile_version: { type: string, enum: [P0_MERCHANT_API_V1] }
+        valid_from: { $ref: "#/components/schemas/PublicTimestamp" }
+        valid_until:
+          anyOf:
+            - type: "null"
+            - $ref: "#/components/schemas/PublicTimestamp"
+        webhook_url: { type: [string, "null"], format: uri }
+        allowed_ips:
+          type: [array, "null"]
+          items: { type: string }
+        version: { type: integer, format: int64, minimum: 1 }
+        created_at: { $ref: "#/components/schemas/PublicTimestamp" }
+        updated_at: { $ref: "#/components/schemas/PublicTimestamp" }
+    MerchantClientList:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/MerchantClientListItem"
+        next_cursor:
+          type: [string, "null"]
+          minLength: 1
+          maxLength: 2048
+    MerchantClientListItem:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - merchant_id
+        - name
+        - lifecycle_state
+        - mtls_fingerprint_sha256
+        - request_key_fingerprint_sha256
+        - profile_version
+        - valid_from
+        - valid_until
+        - version
+        - created_at
+        - updated_at
+      properties:
+        id: { $ref: "#/components/schemas/MerchantClientID" }
+        merchant_id: { $ref: "#/components/schemas/MerchantID" }
+        name: { type: string, minLength: 1, maxLength: 256 }
+        lifecycle_state: { type: string, enum: [PENDING, ACTIVE, SUSPENDED, REVOKED] }
+        mtls_fingerprint_sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+        request_key_fingerprint_sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+        profile_version: { type: string, enum: [P0_MERCHANT_API_V1] }
+        valid_from: { $ref: "#/components/schemas/PublicTimestamp" }
+        valid_until:
+          anyOf:
+            - type: "null"
+            - $ref: "#/components/schemas/PublicTimestamp"
+        version: { type: integer, format: int64, minimum: 1 }
+        created_at: { $ref: "#/components/schemas/PublicTimestamp" }
+        updated_at: { $ref: "#/components/schemas/PublicTimestamp" }
+    PublicTimestamp:
+      type: string
+      format: date-time
+      description: UTC instant with exactly millisecond precision.
+      pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$'
+    InboundInstant:
+      type: string
+      format: date-time
+      description: UTC instant đầu vào với đúng millisecond và hậu tố Z.
+      pattern: '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$'
+    PaymentAmount:
+      type: object
+      additionalProperties: false
+      required: [minor_units, currency]
+      properties:
+        minor_units:
+          type: string
+          pattern: '^[1-9][0-9]*$'
+          maxLength: 19
+          description: Số tiền ở đơn vị nhỏ nhất, không dùng số thực.
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          description: Mã tiền tệ ISO 4217.
+    PaymentInstructionSummary:
+      type: object
+      additionalProperties: false
+      required: [type, expires_at]
+      properties:
+        type: { type: string, enum: [DYNAMIC_QR] }
+        expires_at: { $ref: "#/components/schemas/PublicTimestamp" }
+    CurrentAttemptSummary:
+      type: object
+      additionalProperties: false
+      required:
+        - attempt_id
+        - payment_id
+        - method_code
+        - provider_code
+        - route_code
+        - amount
+        - status
+        - payment_expires_at
+        - created_at
+        - conclusion_revision
+        - version
+        - provider_reference_masked
+      properties:
+        attempt_id: { $ref: "#/components/schemas/ULID" }
+        payment_id: { $ref: "#/components/schemas/ULID" }
+        method_code: { type: string, enum: [QR_PAY] }
+        provider_code: { type: string, minLength: 1, maxLength: 64 }
+        route_code: { type: string, minLength: 1, maxLength: 64 }
+        amount: { $ref: "#/components/schemas/PaymentAmount" }
+        status:
+          type: string
+          enum: [CREATED, REQUESTED, PROCESSING, PENDING, SUCCEEDED, FAILED]
+        payment_expires_at: { $ref: "#/components/schemas/PublicTimestamp" }
+        created_at: { $ref: "#/components/schemas/PublicTimestamp" }
+        conclusion_revision: { type: integer, format: int64, minimum: 0 }
+        version: { type: integer, format: int64, minimum: 1 }
+        provider_reference_masked:
+          type: [string, "null"]
+          minLength: 1
+          maxLength: 128
+    PaymentAttemptAdminListItem:
+      type: object
+      additionalProperties: false
+      required:
+        - attempt_id
+        - payment_id
+        - method_code
+        - provider_code
+        - route_code
+        - amount
+        - status
+        - payment_expires_at
+        - created_at
+        - conclusion_revision
+        - version
+        - provider_reference_masked
+      properties:
+        attempt_id: { $ref: "#/components/schemas/ULID" }
+        payment_id: { $ref: "#/components/schemas/ULID" }
+        method_code: { type: string, enum: [QR_PAY] }
+        provider_code: { type: string, minLength: 1, maxLength: 64 }
+        route_code: { type: string, minLength: 1, maxLength: 64 }
+        amount: { $ref: "#/components/schemas/PaymentAmount" }
+        status:
+          type: string
+          enum: [CREATED, REQUESTED, PROCESSING, PENDING, SUCCEEDED, FAILED]
+        payment_expires_at: { $ref: "#/components/schemas/PublicTimestamp" }
+        created_at: { $ref: "#/components/schemas/PublicTimestamp" }
+        conclusion_revision: { type: integer, format: int64, minimum: 0 }
+        version: { type: integer, format: int64, minimum: 1 }
+        provider_reference_masked:
+          type: [string, "null"]
+          minLength: 1
+          maxLength: 128
+    PaymentAttemptAdminList:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/PaymentAttemptAdminListItem"
+        next_cursor:
+          type: [string, "null"]
+          minLength: 1
+          maxLength: 2048
+    PaymentAdminDetail:
+      type: object
+      additionalProperties: false
+      required:
+        - payment_id
+        - merchant_id
+        - merchant_order_id
+        - operation_id
+        - product_code
+        - amount
+        - status
+        - accepted_at
+        - expires_at
+        - version
+        - is_order_current
+        - replaces_payment_id
+        - payment_method_code
+        - provider_code
+        - provider_route_code
+        - provider_profile_revision
+        - instruction_summary
+        - current_attempt_summary
+      properties:
+        payment_id: { $ref: "#/components/schemas/ULID" }
+        merchant_id: { $ref: "#/components/schemas/MerchantID" }
+        merchant_order_id: { type: string, minLength: 1, maxLength: 128 }
+        operation_id: { type: string, minLength: 1, maxLength: 64 }
+        product_code: { type: string, minLength: 1, maxLength: 64 }
+        amount: { $ref: "#/components/schemas/PaymentAmount" }
+        status:
+          type: string
+          enum: [CREATED, PROCESSING, PENDING, SUCCEEDED, FAILED]
+        accepted_at: { $ref: "#/components/schemas/PublicTimestamp" }
+        expires_at: { $ref: "#/components/schemas/PublicTimestamp" }
+        version: { type: integer, format: int64, minimum: 1 }
+        is_order_current: { type: boolean }
+        replaces_payment_id:
+          type: [string, "null"]
+          minLength: 1
+          maxLength: 128
+        payment_method_code: { type: string, enum: [QR_PAY] }
+        provider_code: { type: string, minLength: 1, maxLength: 64 }
+        provider_route_code: { type: string, minLength: 1, maxLength: 64 }
+        provider_profile_revision: { type: integer, format: int32, minimum: 1 }
+        instruction_summary:
+          anyOf:
+            - type: "null"
+            - $ref: "#/components/schemas/PaymentInstructionSummary"
+        current_attempt_summary:
+          anyOf:
+            - type: "null"
+            - $ref: "#/components/schemas/CurrentAttemptSummary"
+    PaymentAdminListItem:
+      type: object
+      additionalProperties: false
+      required:
+        - payment_id
+        - merchant_order_id
+        - operation_id
+        - product_code
+        - amount
+        - status
+        - accepted_at
+        - expires_at
+        - payment_method_code
+        - provider_code
+        - provider_route_code
+        - current_attempt_id
+      properties:
+        payment_id: { $ref: "#/components/schemas/ULID" }
+        merchant_order_id: { type: string, minLength: 1, maxLength: 128 }
+        operation_id: { type: string, minLength: 1, maxLength: 64 }
+        product_code: { type: string, minLength: 1, maxLength: 64 }
+        amount: { $ref: "#/components/schemas/PaymentAmount" }
+        status:
+          type: string
+          enum: [CREATED, PROCESSING, PENDING, SUCCEEDED, FAILED]
+        accepted_at: { $ref: "#/components/schemas/PublicTimestamp" }
+        expires_at: { $ref: "#/components/schemas/PublicTimestamp" }
+        payment_method_code: { type: string, enum: [QR_PAY] }
+        provider_code: { type: string, minLength: 1, maxLength: 64 }
+        provider_route_code: { type: string, minLength: 1, maxLength: 64 }
+        current_attempt_id:
+          type: [string, "null"]
+          minLength: 26
+          maxLength: 26
+          pattern: "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+    PaymentAdminList:
+      type: object
+      additionalProperties: false
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/PaymentAdminListItem"
+        next_cursor:
+          type: [string, "null"]
+          minLength: 1
+          maxLength: 2048
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, code, request_id, category, retry_advice]
+      properties:
+        type: { type: string, minLength: 1 }
+        title: { type: string, minLength: 1 }
+        status: { type: integer, minimum: 400, maximum: 599 }
+        code: { type: string, minLength: 1 }
+        request_id:
+          $ref: "#/components/schemas/ULID"
+        category:
+          type: string
+          enum: [REQUEST_REJECTION, TECHNICAL_FAILURE]
+        retry_advice:
+          type: string
+          enum:
+            - NO_AUTOMATIC_RETRY
+            - RETRY_SAME_LOGICAL_REQUEST
+            - REAUTHENTICATE_THEN_RETRY_SAME_LOGICAL_REQUEST
+  responses:
+    BadRequest:
+      description: Request HTTP/JSON/ID không hợp lệ
+      headers:
+        Request-Id: { $ref: "#/components/headers/RequestId" }
+        Cache-Control: { $ref: "#/components/headers/CacheControl" }
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
+    UnprocessableEntity:
+      description: Dữ liệu nghiệp vụ hoặc public material không hợp lệ
+      headers:
+        Request-Id: { $ref: "#/components/headers/RequestId" }
+        Cache-Control: { $ref: "#/components/headers/CacheControl" }
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
+    NotFound:
+      description: Resource không tồn tại
+      headers:
+        Request-Id: { $ref: "#/components/headers/RequestId" }
+        Cache-Control: { $ref: "#/components/headers/CacheControl" }
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
+    Conflict:
+      description: Resource hoặc public trust material đã tồn tại
+      headers:
+        Request-Id: { $ref: "#/components/headers/RequestId" }
+        Cache-Control: { $ref: "#/components/headers/CacheControl" }
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
+    CommitUnknown:
+      description: Kết quả ghi chưa xác định; operator không được tạo lại mù
+      headers:
+        Request-Id: { $ref: "#/components/headers/RequestId" }
+        Cache-Control: { $ref: "#/components/headers/CacheControl" }
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
+    InternalError:
+      description: Lỗi nội bộ đã làm sạch
+      headers:
+        Request-Id: { $ref: "#/components/headers/RequestId" }
+        Cache-Control: { $ref: "#/components/headers/CacheControl" }
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
+    MethodNotAllowed:
+      description: Phương thức HTTP không được hỗ trợ trên resource này
+      headers:
+        Request-Id: { $ref: "#/components/headers/RequestId" }
+        Cache-Control: { $ref: "#/components/headers/CacheControl" }
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
+    ServiceUnavailable:
+      description: Dependency owner tạm thời không khả dụng; có thể đọc lại cùng logical request.
+      headers:
+        Request-Id: { $ref: "#/components/headers/RequestId" }
+        Cache-Control: { $ref: "#/components/headers/CacheControl" }
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } }
